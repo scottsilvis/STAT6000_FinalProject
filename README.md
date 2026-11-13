@@ -22,6 +22,10 @@ Rscript run_analysis.R "/path/to/course/data" ALL
 
 The default is NYU. Use `UM_1` or `USM` for the other individual sites, or `ALL` for an exploratory pooled baseline. The pooled model uses connectivity only and does not adjust for site effects. Default output is `results-r/<site>/`. A third positional argument overrides the output directory.
 
+## Reading the code
+
+Start with [`run_analysis.R`](run_analysis.R) for the model settings, cross-validation loop, and final refit. [`R/models.R`](R/models.R) shows fold-local preprocessing and the three model fits. [`R/metrics.R`](R/metrics.R) calculates the evaluation metrics, and [`R/project_files.R`](R/project_files.R) handles input and reporting.
+
 ## Methods and validation
 
 The script follows the Chapter 4 classification lab sequence of inspecting the data, fitting models, and evaluating predictions. It uses the same five seeded, stratified folds for all models. Pooled folds are stratified by both site and diagnosis. The model settings are fixed for this baseline, so the five folds are used for assessment without a hyperparameter search.
