@@ -1,16 +1,18 @@
 # STAT 6000 — ABIDE I Classification Project
 
-This course project compares methods for distinguishing autism spectrum disorder (ASD) from controls using resting-state functional connectivity. The instructor's dataset contains 386 participants from NYU, UM_1, and USM, including 269 labeled training subjects and 117 hidden-test subjects. There are 19,900 connectivity edges per subject.
+This is a work in progress. Feel free to make any changes that you think will get us a better grade. 
+
+This course project compares methods for distinguishing autism spectrum disorder (ASD) from controls using resting-state functional connectivity. The provided dataset contains 386 participants from NYU, UM_1, and USM, including 269 labeled training subjects and 117 hidden-test subjects. There are 19,900 connectivity edges per subject.
 
 ## Run the R baseline
 
-Install the required packages in R. `MASS` and `class` are recommended packages and often come with R.
+The packages `MASS` and `class` are used with the code in this repository. Use the code below to install the packages, if you don't already have them installed. 
 
 ```r
 install.packages(c("R.matlab", "MASS", "class"))
 ```
 
-Keep `ABIDEI_Final_Project.mat` and `ABIDEI_three_sites_behavior.csv` together in your local course-data folder. Run these commands from the repository root.
+Keep `ABIDEI_Final_Project.mat` and `ABIDEI_three_sites_behavior.csv` together in your local course-data folder. Run these commands from the repository root. 
 
 ```bash
 Rscript run_analysis.R "/path/to/course/data"
