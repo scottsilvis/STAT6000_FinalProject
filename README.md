@@ -24,7 +24,13 @@ The default is NYU. Use `UM_1` or `USM` for the other individual sites, or `ALL`
 
 ## Reading the code
 
-Start with [`run_analysis.R`](run_analysis.R) for the model settings, cross-validation loop, and final refit. [`R/models.R`](R/models.R) shows fold-local preprocessing and the three model fits. [`R/metrics.R`](R/metrics.R) calculates the evaluation metrics, and [`R/project_files.R`](R/project_files.R) handles input and reporting.
+Start with [`nyu_lab.R`](nyu_lab.R) for the class-style walkthrough. Edit the data file path at the top, then run the script from the repository root. It prints the NYU class counts and cross-validation metrics, with all three model fits in one loop.
+
+```bash
+Rscript nyu_lab.R
+```
+
+For configurable sites, report files, or private prediction export, use [`run_analysis.R`](run_analysis.R). [`R/models.R`](R/models.R) contains the shared fold preprocessing and the full runner's model fits. [`R/metrics.R`](R/metrics.R) calculates the evaluation metrics.
 
 ## Methods and validation
 
