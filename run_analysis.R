@@ -51,63 +51,34 @@ hidden_rows <- site_rows & is_train == 0
 x <- features[training_rows, , drop = FALSE]
 y <- labels[training_rows]
 
-# 2. Inspect the cohort and report aggregate demographics.
-behavior <- read.csv(file.path(data_dir, "ABIDEI_three_sites_behavior.csv"),
-                     colClasses = c(subject_id = "character"))
-stopifnot(!anyDuplicated(behavior$subject_id))
-demographics <- behavior[match(subject_ids, behavior$subject_id), ]
-if (anyNA(demographics$subject_id) || any(demographics$site != site_names)) {
-  stop("Demographic IDs or sites do not match the MAT file.")
-}
-
-dataset_summary <- NULL
-sex_counts <- NULL
-for (study_site in unique(site_names[site_rows])) {
-  for (split in c("train", "test")) {
-    rows <- site_names == study_site & is_train == as.integer(split == "train")
-    age <- demographics$age[rows]
-    age_summary <- if (all(is.na(age))) rep(NA_real_, 4) else {
-      c(mean(age, na.rm = TRUE), median(age, na.rm = TRUE),
-        min(age, na.rm = TRUE), max(age, na.rm = TRUE))
-    }
-    dataset_summary <- rbind(dataset_summary, data.frame(
-      site = study_site, split = split, subjects = sum(rows), features = ncol(x),
-      controls = if (split == "train") sum(labels[rows] == 0) else NA,
-      asd = if (split == "train") sum(labels[rows] == 1) else NA,
-      age_observed = sum(!is.na(age)), age_mean = age_summary[1],
-      age_median = age_summary[2], age_min = age_summary[3], age_max = age_summary[4]
-    ))
-    counts <- as.data.frame(table(demographics$sex[rows], useNA = "ifany"))
-    sex_counts <- rbind(sex_counts, data.frame(
-      site = study_site, split = split, sex_code = counts$Var1, subjects = counts$Freq
-    ))
-  }
-}
-
-# 3. Fit preprocessing and models using only the supplied training split.
+# 2. Fit preprocessing and models using only the supplied training split.
 # This function is also used for the final refit on all labeled rows.
 fit_and_score <- function(train_x, train_y, new_x, methods) {
+  # Drop edges with no training values. Fill missing values with training medians.
   train_x[!is.finite(train_x)] <- NA_real_
   new_x[!is.finite(new_x)] <- NA_real_
-
-  observed <- colSums(!is.na(train_x)) > 0L
-  train_x <- train_x[, observed, drop = FALSE]
-  new_x <- new_x[, observed, drop = FALSE]
+  keep <- colSums(!is.na(train_x)) > 0L
+  train_x <- train_x[, keep, drop = FALSE]
+  new_x <- new_x[, keep, drop = FALSE]
   medians <- apply(train_x, 2, median, na.rm = TRUE)
-  missing_train <- which(is.na(train_x), arr.ind = TRUE)
-  missing_new <- which(is.na(new_x), arr.ind = TRUE)
-  train_x[missing_train] <- medians[missing_train[, 2]]
-  new_x[missing_new] <- medians[missing_new[, 2]]
 
-  centers <- colMeans(train_x)
-  spreads <- apply(train_x, 2, sd)
-  varying <- is.finite(spreads) & spreads > 0
-  train_x <- scale(train_x[, varying, drop = FALSE], centers[varying], spreads[varying])
-  new_x <- scale(new_x[, varying, drop = FALSE], centers[varying], spreads[varying])
+  for (column in which(colSums(is.na(train_x)) + colSums(is.na(new_x)) > 0L)) {
+    train_x[is.na(train_x[, column]), column] <- medians[column]
+    new_x[is.na(new_x[, column]), column] <- medians[column]
+  }
+
+  # Scale the held-out data with the same center and spread as the training data.
+  spread <- apply(train_x, 2, sd)
+  keep <- is.finite(spread) & spread > 0
+  center <- colMeans(train_x)
+  train_x <- scale(train_x[, keep, drop = FALSE], center[keep], spread[keep])
+  new_x <- scale(new_x[, keep, drop = FALSE],
+                 center = attr(train_x, "scaled:center"), scale = spread[keep])
 
   scores <- matrix(NA_real_, nrow(new_x), length(methods), dimnames = list(NULL, methods))
 
-  if (models[1] %in% methods) {
+  # Logistic regression on the strongest individual edges.
+  if ("Logistic regression" %in% methods) {
     # With a binary outcome, absolute correlation ranks edges like the one-way F test.
     edge_strength <- abs(drop(crossprod(train_x, train_y - mean(train_y))))
     stopifnot(length(edge_strength) >= n_edges)
@@ -118,26 +89,27 @@ fit_and_score <- function(train_x, train_y, new_x, methods) {
     if (!fit$converged || fit$rank < n_edges + 1L) {
       stop("Logistic regression failed to converge or has a rank-deficient design.")
     }
-    scores[, models[1]] <- predict(fit, newdata = new_edges, type = "response")
+    scores[, "Logistic regression"] <- predict(fit, newdata = new_edges, type = "response")
   }
 
-  if (any(models[2:3] %in% methods)) {
+  # Fit one PCA for the two methods that use principal components.
+  if (any(c("PCA + LDA", "PCA + KNN") %in% methods)) {
     stopifnot(nrow(train_x) > n_components + 2L, ncol(train_x) >= n_components)
     pca <- prcomp(train_x, center = FALSE, scale. = FALSE, rank. = n_components)
     train_pcs <- pca$x
     new_pcs <- predict(pca, newdata = new_x)
     group <- factor(train_y, levels = 0:1)
 
-    if (models[2] %in% methods) {
+    if ("PCA + LDA" %in% methods) {
       fit <- MASS::lda(train_pcs, grouping = group)
-      scores[, models[2]] <- predict(fit, newdata = new_pcs)$posterior[, "1"]
+      scores[, "PCA + LDA"] <- predict(fit, newdata = new_pcs)$posterior[, "1"]
     }
 
-    if (models[3] %in% methods) {
+    if ("PCA + KNN" %in% methods) {
       classification <- class::knn(train_pcs, new_pcs, group, k = neighbors, prob = TRUE)
       vote_share <- attr(classification, "prob")
       # knn returns the winning class's vote share. Recover the ASD share.
-      scores[, models[3]] <- ifelse(classification == "1", vote_share, 1 - vote_share)
+      scores[, "PCA + KNN"] <- ifelse(classification == "1", vote_share, 1 - vote_share)
     }
   }
 
@@ -145,7 +117,7 @@ fit_and_score <- function(train_x, train_y, new_x, methods) {
   scores
 }
 
-# 4. Use the same stratified folds for all three methods.
+# 3. Use the same stratified folds for all three methods.
 measure <- function(actual, score) {
   confusion <- table(actual = factor(actual, levels = 0:1),
                      predicted = factor(as.integer(score >= 0.5), levels = 0:1))
@@ -195,7 +167,43 @@ for (model in models) {
 comparison <- comparison[order(comparison$roc_auc, decreasing = TRUE), ]
 winner <- comparison$model[1]
 
-# 5. Save aggregate results and optionally predict the local hidden-test records.
+# 4. Save aggregate results and optionally predict the local hidden-test records.
+# Describe the cohort by site and split for the output tables.
+behavior <- read.csv(file.path(data_dir, "ABIDEI_three_sites_behavior.csv"),
+                     colClasses = c(subject_id = "character"))
+stopifnot(!anyDuplicated(behavior$subject_id))
+demographics <- behavior[match(subject_ids, behavior$subject_id), ]
+if (anyNA(demographics$subject_id) || any(demographics$site != site_names)) {
+  stop("Demographic IDs or sites do not match the MAT file.")
+}
+
+cohort <- data.frame(
+  site = site_names[site_rows],
+  split = ifelse(is_train[site_rows] == 1, "train", "test"),
+  diagnosis = labels[site_rows],
+  age = demographics$age[site_rows],
+  sex = demographics$sex[site_rows]
+)
+groups <- split(cohort, list(cohort$site, cohort$split), drop = TRUE)
+dataset_summary <- lapply(groups, function(group) {
+  age <- group$age[!is.na(group$age)]
+  data.frame(
+    site = group$site[1], split = group$split[1], subjects = nrow(group),
+    features = ncol(x),
+    controls = if (group$split[1] == "train") sum(group$diagnosis == 0) else NA,
+    asd = if (group$split[1] == "train") sum(group$diagnosis == 1) else NA,
+    age_observed = length(age),
+    age_mean = if (length(age)) mean(age) else NA,
+    age_median = if (length(age)) median(age) else NA,
+    age_min = if (length(age)) min(age) else NA,
+    age_max = if (length(age)) max(age) else NA
+  )
+})
+dataset_summary <- do.call(rbind, dataset_summary)
+sex_counts <- as.data.frame(with(cohort, table(site, split, sex_code = sex, useNA = "ifany")))
+names(sex_counts)[4] <- "subjects"
+sex_counts <- subset(sex_counts, subjects > 0)
+
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 write.csv(dataset_summary, file.path(out_dir, "dataset_summary.csv"), row.names = FALSE)
 write.csv(sex_counts, file.path(out_dir, "sex_counts.csv"), row.names = FALSE)

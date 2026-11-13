@@ -58,15 +58,10 @@ Only the `ALL` run covers all 117 hidden-test IDs required by the assignment. Re
 | PCA + KNN | 0.642 | 0.616 | 0.600 | 0.608 |
 | Logistic regression | 0.440 | 0.619 | 0.472 | 0.608 |
 
-These scores use the same 125 labeled NYU subjects. Python values are the historical results below. The R logistic baseline also produced a warning about fitted probabilities near zero or one in the UM_1 run, so interpret that fit with care.
+These scores use the same 125 labeled NYU subjects. See the [full R results](RESULTS.md), [aggregate metrics CSV](results/model_comparison.csv), and [EDA and validation checks](EDA_AND_VALIDATION.md).
 
-## Python reference
+## Historical Python reference
 
-[`run_analysis.py`](run_analysis.py), [`requirements.txt`](requirements.txt), and the historical [NYU results](RESULTS.md) and [EDA notes](EDA_AND_VALIDATION.md) are retained for reference. The Python version uses nested CV with different model settings, so the two baselines can be compared descriptively. Their metric differences do not isolate the effect of switching languages.
-
-```bash
-python -m pip install -r requirements.txt
-python run_analysis.py --data-dir "/path/to/course/data" --site NYU --out results
-```
+The [archived Python script](https://github.com/scottsilvis/STAT6000_FinalProject/blob/3e18876130647f14c1ae81aa13056cefa580d462/run_analysis.py), [Python dependencies](requirements.txt), and [historical NYU metrics](results/python_nyu_model_comparison.csv) are available for reference. Python used nested CV with different model settings, so differences between the baselines do not isolate the effect of switching languages.
 
 The assignment lists November 19 for initial predictions and December 6 for the final materials. Verify submission details in Canvas and follow the course policy for acknowledging assistance.

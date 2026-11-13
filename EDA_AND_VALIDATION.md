@@ -1,32 +1,29 @@
-# Preliminary NYU EDA and validation checks
+# Exploratory analysis and validation checks
 
-## Demographics
+The instructor data contain 386 participants and 19,900 functional connectivity edges per participant. The R workflow matches demographics to the MAT records by subject ID and summarizes age and coded sex by site and split.
 
-Descriptive figures for all 179 NYU records (including the 54 unlabeled test subjects), from the provided demographics CSV:
+| Site | Total | Labeled | Controls | ASD | Hidden test |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| NYU | 179 | 125 | 73 | 52 | 54 |
+| UM_1 | 107 | 74 | 38 | 36 | 33 |
+| USM | 100 | 70 | 30 | 40 | 30 |
+| All sites | 386 | 269 | 141 | 128 | 117 |
 
-| Measure | Value |
-| --- | ---: |
-| Mean / median age | 15.39 / 13.63 years |
-| Age range | 6.47–39.10 years |
-| Under 10 | 36 |
-| 10–14 | 73 |
-| 15–19 | 27 |
-| 20–29 | 37 |
-| 30 or older | 6 |
-| Sex code 1 / code 2 | 142 / 37 |
-| Recorded timepoints | 175 each |
+| Site | Split | Median age (years) | Age range (years) | Sex code 1 | Sex code 2 |
+| --- | --- | ---: | --- | ---: | ---: |
+| NYU | Labeled | 13.72 | 6.47–38.76 | 99 | 26 |
+| NYU | Hidden test | 13.29 | 7.13–39.10 | 43 | 11 |
+| UM_1 | Labeled | 12.80 | 8.20–19.20 | 64 | 10 |
+| UM_1 | Hidden test | 13.80 | 8.90–18.20 | 19 | 14 |
+| USM | Labeled | 19.97 | 8.77–39.39 | 70 | 0 |
+| USM | Hidden test | 20.17 | 9.92–50.22 | 30 | 0 |
 
-Sex is coded as 1 or 2, without a provided key identifying the categories. This does not prevent statistical comparisons, but it limits our interpretation. Demographic summaries for all 179 NYU subjects cannot show ASD-group differences because 54 subjects have "unknown" diagnoses. However, we can compare demographic differences between the 73 controls and 52 ASD cases in the labeled subset.
+Age and coded sex were available for all participants. The supplied files give no key for interpreting the sex codes. Age and sex-code distributions differ by site. The pooled folds preserve the site and diagnosis proportions through stratification, while the models use connectivity alone. This design estimates performance on held-out participants from the represented sites. Generalization to a new site would require a different validation design.
 
-## Model evaluation checks
+## Checks on the R baseline
 
-Saved out-of-fold scores were checked against the aggregate AUCs, with one out-of-fold prediction per subject per model (125 subjects per method). See `RESULTS.md` and `results/model_comparison.csv`.
+- All three methods used the same five folds within each cohort. Imputation, scaling, feature selection, and PCA were fitted on each training split. The analysis required one finite out-of-fold score per labeled subject and method before pooling metrics.
+- NYU metrics reproduced on a second run. For all four cohorts, each method's pooled confusion counts summed to the cohort's labeled sample size.
+- Local prediction files contained 54 NYU, 33 UM_1, 30 USM, and 117 pooled IDs. Each file matched the original MAT-file order, with unique IDs and valid scores and labels. These files stay local.
 
-A NYU-only test file was checked for 54 distinct IDs with valid probabilities and binary labels; it remains outside the public repository. No hidden diagnoses were accessed.
-
-## Outstanding analyses
-
-- Compare site composition and training-class balance across NYU, UM_1 and USM.
-- Inspect missing values and age/sex distributions by site and *labeled* diagnostic class.
-- Document cross-validation strategy for pooled modeling, including site effects.
-- Reproduce full-data model comparisons and generate figures for the group report.
+The script writes `dataset_summary.csv` and `sex_counts.csv` for each run. See [Results](RESULTS.md) for the model comparisons and limitations.
