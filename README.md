@@ -1,67 +1,72 @@
 # STAT 6000 — ABIDE I Classification Project
 
-Course project exploring whether resting-state functional connectivity can distinguish autism spectrum disorder (ASD) from typically developing controls.
+This course project compares methods for distinguishing autism spectrum disorder (ASD) from controls using resting-state functional connectivity. The instructor's dataset contains 386 participants from NYU, UM_1, and USM, including 269 labeled training subjects and 117 hidden-test subjects. There are 19,900 connectivity edges per subject.
 
-## Project scope
+## Run the R baseline
 
-The course assignment includes **386 participants from three ABIDE I sites** (NYU, UM_1, and USM), with 269 labeled training subjects and 117 unlabeled test subjects. Each participant has 19,900 pairwise connectivity features from 200 brain regions.
+Install the required packages in R. `MASS` and `class` are recommended packages and often come with R.
 
-**Current work is a preliminary NYU-only analysis**, prepared before the project group formed. It is a starting point for the team, not the final group submission. The team still needs to agree on a pooled-data strategy, handle site effects, compare models, and generate predictions for **all 117** test subjects as the assignment requires.
+```r
+install.packages(c("R.matlab", "MASS", "class"))
+```
 
-## Repository contents
+Keep `ABIDEI_Final_Project.mat` and `ABIDEI_three_sites_behavior.csv` together in your local course-data folder. Run these commands from the repository root.
 
-| File | Purpose |
+```bash
+Rscript run_analysis.R "/path/to/course/data"
+Rscript run_analysis.R "/path/to/course/data" UM_1
+Rscript run_analysis.R "/path/to/course/data" ALL
+```
+
+The default is NYU. Use `UM_1` or `USM` for the other individual sites, or `ALL` for an exploratory pooled baseline. The pooled model uses connectivity only and does not adjust for site effects. Default output is `results-r/<site>/`. A third positional argument overrides the output directory.
+
+## Methods and validation
+
+The script follows the Chapter 4 classification lab sequence of inspecting the data, fitting models, and evaluating predictions. It uses the same five seeded, stratified folds for all models. Pooled folds are stratified by both site and diagnosis. The model settings are fixed for this baseline, so the five folds are used for assessment without a hyperparameter search.
+
+1. **Logistic regression** uses `glm(..., family = binomial())` on the five edges with the largest absolute training-only correlations with diagnosis. A small edge count limits the number of coefficients relative to each site's sample size.
+2. **PCA + LDA** uses `MASS::lda()` with the first ten principal components and takes the ASD posterior probability.
+3. **PCA + KNN** uses `class::knn()` with the first ten principal components and seven neighbors, using the ASD vote share as the score.
+
+Each fold learns which edges to keep, median imputation, centering and scaling, and feature selection or PCA from its training rows. The fitted transformations are applied to its held-out rows. Site and demographics are used for stratification or description and are excluded from the model inputs.
+
+The comparison table pools one out-of-fold score per subject and model. Report ROC AUC and, at an ASD score cutoff of 0.5, accuracy, ASD sensitivity, control specificity, and counts for the confusion matrix. The highest pooled out-of-fold AUC selects the candidate for refitting. Its cross-validation result comes from the same comparison used for selection, so it is not an independent estimate for the selected model.
+
+## Outputs
+
+| File | Contents |
 | --- | --- |
-| `run_analysis.py` | Baseline single-site model comparison (logistic regression, PCA+LDA, PCA+KNN) |
-| `REPORT_DRAFT.md` | Working methods and results for the NYU baseline |
-| `RESULTS.md` | NYU baseline metrics and model selection |
-| `EDA_AND_VALIDATION.md` | Demographic summaries and evaluation audit |
-| `PRESENTATION_OUTLINE.md` | Suggested structure for the group presentation |
-| `results/model_comparison.csv` | Aggregated NYU cross-validation metrics |
+| `dataset_summary.csv` | Counts and age summaries by site and split, labeled class balance, and feature count |
+| `sex_counts.csv` | Sex-code frequencies by site and split |
+| `fold_metrics.csv` | One row per held-out fold and method |
+| `model_comparison.csv` | Pooled out-of-fold metrics and confusion counts |
+| `run_settings.csv`, `session_info.txt` | Model settings, selected method, and R environment |
 
-## Getting started
+Use `--predict` to refit the selected pipeline on all labeled rows in the requested cohort and produce private predictions. Hidden rows stay in the original MAT-file order and the CSV preserves leading zeros in subject IDs.
 
-Use Python 3.10+ and install dependencies:
+```bash
+Rscript run_analysis.R "/path/to/course/data" ALL --predict
+```
+
+Only the `ALL` run covers all 117 hidden-test IDs required by the assignment. Review the pooled strategy and site effects with the team before choosing a submission. Keep the instructor's raw files and subject-level predictions local. The default output directory and prediction CSV pattern are ignored by Git. Hidden labels must stay outside development and must never be reconstructed from external data.
+
+## Verified NYU comparison
+
+| Model | R ROC AUC | Python ROC AUC | R accuracy | Python accuracy |
+| --- | ---: | ---: | ---: | ---: |
+| PCA + LDA | 0.647 | 0.666 | 0.608 | 0.648 |
+| PCA + KNN | 0.642 | 0.616 | 0.600 | 0.608 |
+| Logistic regression | 0.440 | 0.619 | 0.472 | 0.608 |
+
+These scores use the same 125 labeled NYU subjects. Python values are the historical results below. The R logistic baseline also produced a warning about fitted probabilities near zero or one in the UM_1 run, so interpret that fit with care.
+
+## Python reference
+
+[`run_analysis.py`](run_analysis.py), [`requirements.txt`](requirements.txt), and the historical [NYU results](RESULTS.md) and [EDA notes](EDA_AND_VALIDATION.md) are retained for reference. The Python version uses nested CV with different model settings, so the two baselines can be compared descriptively. Their metric differences do not isolate the effect of switching languages.
 
 ```bash
 python -m pip install -r requirements.txt
-```
-
-Download the two instructor-provided files and keep them locally in the same directory:
-- `ABIDEI_Final_Project.mat`
-- `ABIDEI_three_sites_behavior.csv`
-
-Run the NYU baseline:
-
-```bash
 python run_analysis.py --data-dir "/path/to/course/data" --site NYU --out results
 ```
 
-The script supports NYU, UM_1 and USM **separately**. It does not currently train a pooled three-site model or produce the required combined submission. Output includes per-fold metrics, out-of-fold probabilities, model summaries and site-specific predictions.
-
-## Current NYU baseline
-
-| Model | Out-of-fold ROC AUC | Accuracy | ASD sensitivity | Control specificity |
-| --- | ---: | ---: | ---: | ---: |
-| PCA + LDA | 0.666 | 0.648 | 0.462 | 0.781 |
-| Logistic regression | 0.619 | 0.608 | 0.442 | 0.726 |
-| PCA + KNN | 0.616 | 0.608 | 0.385 | 0.767 |
-
-These are cross-validation estimates on **125 labeled NYU subjects**, not hidden-test performance or final group results.
-
-## Next steps for the team
-
-1. Agree on dataset handling, responsibilities, evaluation plan and shared coding conventions.
-2. Extend EDA to all three sites, including training labels, age, coded sex and site distributions.
-3. Develop a pooled-data pipeline with preprocessing entirely inside the cross-validation folds; consider site effects explicitly.
-4. Compare at least three methods under the same train-only evaluation design.
-5. Refit the chosen model on labeled training records; create one prediction file covering all 117 test IDs.
-6. Prepare the report, presentation and reproducibility instructions.
-
-The original assignment sets **November 19** for initial predictions and **December 6** for the final materials. Verify deadlines and submission arrangements in Canvas.
-
-## Data and research integrity
-
-Instructor-supplied data and subject-level predictions are not distributed here. Keep hidden-test labels out of development; do not use external ABIDE records to reconstruct diagnoses. Model choice and preprocessing must use labeled training data only.
-
-Team members should review and understand all code, results and writing before using them in submissions, and follow the course policy for acknowledging any AI or other assistance. Commit history has been preserved.
+The assignment lists November 19 for initial predictions and December 6 for the final materials. Verify submission details in Canvas and follow the course policy for acknowledging assistance.

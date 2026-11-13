@@ -5,3 +5,8 @@ results/
 *.mat
 ABIDEI_three_sites_behavior.csv
 .DS_Store
+
+/results-r/
+*_test_predictions.csv
+.Rhistory
+.RData
