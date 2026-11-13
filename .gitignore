@@ -10,3 +10,6 @@ ABIDEI_three_sites_behavior.csv
 *_test_predictions.csv
 .Rhistory
 .RData
+
+!/data/ABIDEI_Final_Project.mat
+!/data/ABIDEI_three_sites_behavior.csv

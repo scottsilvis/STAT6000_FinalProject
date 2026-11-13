@@ -1,5 +1,5 @@
-# Data file path. Edit this line before running the script.
-mat_file <- "/path/to/course/data/ABIDEI_Final_Project.mat"
+# Data file path relative to the repository root.
+mat_file <- "data/ABIDEI_Final_Project.mat"
 
 source("R/models.R")   # prepare_edges(): training medians, means, and SDs
 source("R/metrics.R")  # measure(): AUC and confusion-matrix metrics

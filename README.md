@@ -12,19 +12,24 @@ The packages `MASS` and `class` are used with the code in this repository. Use t
 install.packages(c("R.matlab", "MASS", "class"))
 ```
 
-Keep `ABIDEI_Final_Project.mat` and `ABIDEI_three_sites_behavior.csv` together in your local course-data folder. Run these commands from the repository root. 
+The instructor-provided files are included in [`data/`](data/):
+
+- `data/ABIDEI_Final_Project.mat`
+- `data/ABIDEI_three_sites_behavior.csv`
+
+Run these commands from the repository root.
 
 ```bash
-Rscript run_analysis.R "/path/to/course/data"
-Rscript run_analysis.R "/path/to/course/data" UM_1
-Rscript run_analysis.R "/path/to/course/data" ALL
+Rscript run_analysis.R data
+Rscript run_analysis.R data UM_1
+Rscript run_analysis.R data ALL
 ```
 
 The default is NYU. Use `UM_1` or `USM` for the other individual sites, or `ALL` for an exploratory pooled baseline. The pooled model uses connectivity only and does not adjust for site effects. Default output is `results-r/<site>/`. A third positional argument overrides the output directory.
 
 ## Reading the code
 
-Start with [`nyu_lab.R`](nyu_lab.R) for the class-style walkthrough. Edit the data file path at the top, then run the script from the repository root. It prints the NYU class counts and cross-validation metrics, with all three model fits in one loop.
+Start with [`nyu_lab.R`](nyu_lab.R) for the class-style walkthrough. With the `.mat` file in `data/`, run the script from the repository root. Edit the path at the top only if you keep the file elsewhere. It prints the NYU class counts and cross-validation metrics, with all three model fits in one loop.
 
 ```bash
 Rscript nyu_lab.R
@@ -57,10 +62,10 @@ The comparison table pools one out-of-fold score per subject and model. Report R
 Use `--predict` to refit the selected pipeline on all labeled rows in the requested cohort and produce private predictions. Hidden rows stay in the original MAT-file order and the CSV preserves leading zeros in subject IDs.
 
 ```bash
-Rscript run_analysis.R "/path/to/course/data" ALL --predict
+Rscript run_analysis.R data ALL --predict
 ```
 
-Only the `ALL` run covers all 117 hidden-test IDs required by the assignment. Review the pooled strategy and site effects with the team before choosing a submission. Keep the instructor's raw files and subject-level predictions local. The default output directory and prediction CSV pattern are ignored by Git. Hidden labels must stay outside development and must never be reconstructed from external data.
+Only the `ALL` run covers all 117 hidden-test IDs required by the assignment. Review the pooled strategy and site effects with the team before choosing a submission. Keep subject-level predictions local. The default output directory and prediction CSV pattern are ignored by Git. Hidden labels must stay outside development and must never be reconstructed from external data.
 
 ## Verified NYU comparison
 
