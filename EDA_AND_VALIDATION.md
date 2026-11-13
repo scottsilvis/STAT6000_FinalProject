@@ -1,10 +1,8 @@
 # Preliminary NYU EDA and validation checks
 
-This note describes the single-site exploration undertaken before the group was formed. It should be supplemented with a **three-site training-data EDA** for the final report.
-
 ## Demographics
 
-Descriptive figures for all 179 NYU records (including the 54 unlabeled test subjects), from the instructor-provided demographics CSV:
+Descriptive figures for all 179 NYU records (including the 54 unlabeled test subjects), from the provided demographics CSV:
 
 | Measure | Value |
 | --- | ---: |
@@ -18,7 +16,7 @@ Descriptive figures for all 179 NYU records (including the 54 unlabeled test sub
 | Sex code 1 / code 2 | 142 / 37 |
 | Recorded timepoints | 175 each |
 
-Sex category definitions were not confirmed. These descriptive values **do not** show ASD-group differences because they include unlabeled test records. The labeled NYU subset includes 73 controls and 52 ASD cases.
+Sex is coded as 1 or 2, without a provided key identifying the categories. This does not prevent statistical comparisons, but it limits our interpretation. Demographic summaries for all 179 NYU subjects cannot show ASD-group differences because 54 subjects have "unknown" diagnoses. However, we can compare demographic differences between the 73 controls and 52 ASD cases in the labeled subset.
 
 ## Model evaluation checks
 
