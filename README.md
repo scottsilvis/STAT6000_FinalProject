@@ -67,6 +67,15 @@ Rscript run_analysis.R data ALL --predict
 
 Only the `ALL` run covers all 117 hidden-test IDs required by the assignment. Review the pooled strategy and site effects with the team before choosing a submission. Keep subject-level predictions local. The default output directory and prediction CSV pattern are ignored by Git. Hidden labels must stay outside development and must never be reconstructed from external data.
 
+## Round 1 submission
+
+**Due November 24, 2026, at 11:59 PM.** The first leaderboard will be announced November 25, 2026. Teams are ranked by test ROC AUC, with accuracy as the tiebreaker.
+
+1. Download the [official Excel template](https://auburn.instructure.com/courses/1739715/files/295332460?wrap=1).
+2. Refit the team's selected model using labeled training data only. The pooled baseline command above produces a local CSV with predictions for all 117 test subjects.
+3. Match the predictions to the template by subject ID, preserving leading zeros and the template's row order. Fill only the two yellow columns. Enter `0` (Control) or `1` (ASD) in `predicted_label` and an ASD probability between 0 and 1 in `predicted_probability`. Preserve all subject IDs, site values, headers, and workbook structure.
+4. Verify that all 117 subjects have both values. Save as `TeamName_Round1.xlsx` and submit one completed Excel workbook per team through Canvas. The local CSV is an intermediate file.
+
 ## Verified NYU comparison
 
 | Model | R ROC AUC | Python ROC AUC | R accuracy | Python accuracy |
@@ -81,4 +90,4 @@ These scores use the same 125 labeled NYU subjects. See the [full R results](RES
 
 The [archived Python script](https://github.com/scottsilvis/STAT6000_FinalProject/blob/3e18876130647f14c1ae81aa13056cefa580d462/run_analysis.py), [Python dependencies](requirements.txt), and [historical NYU metrics](results/python_nyu_model_comparison.csv) are available for reference. Python used nested CV with different model settings, so differences between the baselines do not isolate the effect of switching languages.
 
-The assignment lists November 19 for initial predictions and December 6 for the final materials. Verify submission details in Canvas and follow the course policy for acknowledging assistance.
+The original assignment lists December 6 for final materials. Follow the course policy for acknowledging assistance.
