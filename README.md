@@ -1,105 +1,82 @@
 # STAT 6000 — ABIDE I Classification Project
 
-This is a work in progress. Feel free to make any changes that you think will get us a better grade. 
+This course project compares methods for distinguishing autism spectrum disorder (ASD) from controls using resting-state functional connectivity. The dataset contains 386 participants from NYU, UM_1, and USM: 269 labeled training subjects and 117 hidden-test subjects, with 19,900 connectivity edges per subject.
 
-This course project compares methods for distinguishing autism spectrum disorder (ASD) from controls using resting-state functional connectivity. The provided dataset contains 386 participants from NYU, UM_1, and USM, including 269 labeled training subjects and 117 hidden-test subjects. There are 19,900 connectivity edges per subject.
+## Run the project
 
-## Run the R baseline
-
-The R baseline uses tidymodels recipes and workflows for fold-specific preprocessing and modeling. Install the packages below if necessary. 
+Install the packages once.
 
 ```r
 install.packages(c("R.matlab", "pROC", "tidymodels", "discrim", "kknn", "glmnet", "ggplot2", "here"))
 ```
 
-The instructor-provided files are included in [`data/`](data/):
+The instructor-provided files are in [`data/`](data/):
 
 - `data/ABIDEI_Final_Project.mat`
 - `data/ABIDEI_three_sites_behavior.csv`
 
-Run these commands from the repository root.
+From the repository root, run the whole project with one command.
 
-```bash
-Rscript run_analysis.R data
-Rscript run_analysis.R data UM_1
-Rscript run_analysis.R data ALL
+```r
+source("run_analysis.R")
 ```
 
-The default is NYU. Use `UM_1` or `USM` for the other individual sites, or `ALL` for an exploratory pooled baseline. The pooled model uses connectivity only and does not adjust for site effects. Default output is `results-r/<site>/`. A third positional argument overrides the output directory.
-
-## Reading the code
-
-Start with [`nyu_lab.R`](nyu_lab.R) for the class-style walkthrough. With the `.mat` file in `data/`, run the script from the repository root. Edit the path at the top only if you keep the file elsewhere. It prints the NYU class counts and cross-validation metrics, with all three model fits in one loop.
+or
 
 ```bash
-Rscript nyu_lab.R
+Rscript run_analysis.R
 ```
 
-The main runner uses these scripts in order:
+The script loads the data, runs the EDA, cross-validates three models, picks the model with the highest pooled held-out ROC AUC, and predicts the 117 test subjects. All outputs are written to `results/`. Results from the last run are already in `results/`, so teammates can read them without rerunning anything.
 
-1. `R/01_load_data.R` — load connectivity data and labels.
-2. `R/02_eda.R` — required EDA tables and four ggplot2 figures, using all three sites. Run it after loading data with `describe_data(study, "data", "results-r/ALL")`.
-3. `R/03_validation.R` — five shared, diagnosis-stratified cross-validation folds.
-4. `R/04_logistic-regression.R` — penalized logistic regression on standardized connectivity edges.
-5. `R/04_pca.R` — PCA feeding LDA and KNN.
-6. `R/05_compare.R` — summarize the held-out predictions using the unchanged `R/metrics.R`.
-7. `R/06_predict.R` — optional final refit and hidden-test prediction export.
+## What each file does
 
-`run_analysis.R` sources these scripts automatically. `R/project_files.R` retains command-line options and dataset-reading utilities.
+[`run_analysis.R`](run_analysis.R) sources these scripts in order.
+
+| File | Role |
+| --- | --- |
+| `R/metrics.R` | `measure()` returns ROC AUC, accuracy, sensitivity, specificity, and confusion counts |
+| `R/01_load_data.R` | Loads connectivity data and demographics, splits training and test subjects, and checks the data |
+| `R/02_eda.R` | EDA tables and four figures |
+| `R/03_validation.R` | Five diagnosis-stratified folds (seed 6000) and per-fold scoring of a workflow |
+| `R/04_logistic-regression.R` | Regularized logistic regression workflow |
+| `R/04_pca.R` | PCA + LDA and PCA + KNN workflows |
+| `R/05_compare.R` | Scores every model on the same folds and ranks them by ROC AUC |
+| `R/06_predict.R` | Refits the best model on all labeled subjects and predicts the test subjects |
+| `R/utils_plot.R` | `save_fig()` and `save_table()` helpers |
 
 ## Methods and validation
 
-All three models use the same five diagnosis-stratified folds. Each classifier's recipe estimates imputation, filtering and scaling from **training subjects within each fold**, not from validation or hidden-test subjects.
+All models use the same five diagnosis-stratified folds. Each model's recipe learns imputation, filtering, scaling, and PCA from the **training portion of each fold only**, never from validation or test subjects.
 
-- **Logistic regression:** `parsnip::logistic_reg()` with the `glmnet` engine, fixed L1 penalty 0.01. Regularization makes logistic regression feasible with 19,900 edges.
-- **PCA + LDA:** `discrim::discrim_linear()` with `MASS`, using ten PCA components.
-- **PCA + KNN:** `parsnip::nearest_neighbor()` with `kknn`, using ten PCA components and seven neighbors.
+- **Logistic regression:** `glmnet` engine, fixed L1 penalty of 0.01, on all 19,900 standardized edges. Regularization makes this feasible with far more edges than subjects.
+- **PCA + LDA:** `MASS` engine on 10 principal components.
+- **PCA + KNN:** `kknn` engine on 10 principal components, 7 neighbors.
 
-The settings are intentionally fixed for this baseline, not tuned against validation scores. `R/metrics.R` is left untouched: its `measure()` function reports ROC AUC, accuracy, sensitivity, specificity, and confusion counts. The model with the highest pooled held-out AUC is refitted on all labeled records for optional hidden predictions; the winning CV AUC is not an independently confirmed performance estimate.
-
-**Execution status:** The modular scripts have not been run or validated in an R runtime. Existing numerical results below are historical and must not be presented as results from this refactor.
+The settings are fixed and were not tuned. The best model is chosen automatically by pooled out-of-fold ROC AUC, using training subjects only. That AUC is not an independent performance estimate, because the same folds were used to choose the model. See [RESULTS.md](RESULTS.md) for the numbers.
 
 ## Outputs
 
 | File | Contents |
 | --- | --- |
-| `dataset_summary.csv` | Counts and age summaries by site and split, labeled class balance, and feature count |
-| `sex_counts.csv` | Sex-code frequencies by site and split (1/2 codes, unverified labels) |
-| `class_balance.csv`, `age_summary.csv`, `feature_summary.csv` | Labeled diagnosis counts, age descriptions, and dimensionality/completeness |
-| `site_counts.png`, `class_balance.png`, `age_distribution.png`, `sex_codes.png` | ggplot2 EDA figures for the report |
-| `fold_metrics.csv` | One row per held-out fold and method |
+| `site_counts.csv`, `class_balance.csv`, `sex_counts.csv`, `age_summary.csv`, `feature_summary.csv` | EDA tables |
+| `site_counts.png`, `class_balance.png`, `age_distribution.png`, `sex_codes.png` | EDA figures |
+| `fold_metrics.csv` | One row per held-out fold and model |
 | `model_comparison.csv` | Pooled out-of-fold metrics and confusion counts |
-| `run_settings.csv`, `session_info.txt` | Model settings, selected method, and R environment |
+| `session_info.txt` | R and package versions |
+| `test_predictions.csv` | Test-subject predictions. Created locally and ignored by Git |
 
-Use `--predict` to refit the selected pipeline on all labeled rows in the requested cohort and produce private predictions. Hidden rows stay in the original MAT-file order and the CSV preserves leading zeros in subject IDs.
+Sex is stored as codes 1 and 2. The supplied files do not say what the codes mean, so the EDA leaves them as codes.
 
-```bash
-Rscript run_analysis.R data ALL --predict
-```
-
-Only the `ALL` run covers all 117 hidden-test IDs required by the assignment. Review the pooled strategy and site effects with the team before choosing a submission. Keep subject-level predictions local. The default output directory and prediction CSV pattern are ignored by Git. Hidden labels must stay outside development and must never be reconstructed from external data.
+Keep subject-level predictions local. Hidden labels must stay outside development and must never be reconstructed from external data.
 
 ## Round 1 submission
 
 **Due November 24, 2026, at 11:59 PM.** The first leaderboard will be announced November 25, 2026. Teams are ranked by test ROC AUC, with accuracy as the tiebreaker.
 
 1. Download the [official Excel template](https://auburn.instructure.com/courses/1739715/files/295332460?wrap=1).
-2. Refit the team's selected model using labeled training data only. The pooled baseline command above produces a local CSV with predictions for all 117 test subjects.
+2. Run `run_analysis.R` to produce `results/test_predictions.csv`, which covers all 117 test subjects.
 3. Match the predictions to the template by subject ID, preserving leading zeros and the template's row order. Fill only the two yellow columns. Enter `0` (Control) or `1` (ASD) in `predicted_label` and an ASD probability between 0 and 1 in `predicted_probability`. Preserve all subject IDs, site values, headers, and workbook structure.
 4. Verify that all 117 subjects have both values. Save as `TeamName_Round1.xlsx` and submit one completed Excel workbook per team through Canvas. The local CSV is an intermediate file.
-
-## Historical NYU comparison (before tidymodels refactor)
-
-| Model | R ROC AUC | Python ROC AUC | R accuracy | Python accuracy |
-| --- | ---: | ---: | ---: | ---: |
-| PCA + LDA | 0.647 | 0.666 | 0.608 | 0.648 |
-| PCA + KNN | 0.642 | 0.616 | 0.600 | 0.608 |
-| Logistic regression | 0.440 | 0.619 | 0.472 | 0.608 |
-
-These scores predate the tidymodels implementation and must be regenerated before reporting results from the new R models. The logistic regression feature strategy and KNN probability engine changed. These historical scores use the same 125 labeled NYU subjects. See the [full R results](RESULTS.md), [aggregate metrics CSV](results/model_comparison.csv), and [EDA and validation checks](EDA_AND_VALIDATION.md).
-
-## Historical Python reference
-
-The [archived Python script](https://github.com/scottsilvis/STAT6000_FinalProject/blob/3e18876130647f14c1ae81aa13056cefa580d462/run_analysis.py), [Python dependencies](requirements.txt), and [historical NYU metrics](results/python_nyu_model_comparison.csv) are available for reference. Python used nested CV with different model settings, so differences between the baselines do not isolate the effect of switching languages.
 
 The original assignment lists December 6 for final materials. Follow the course policy for acknowledging assistance.
