@@ -9,7 +9,7 @@ This course project compares methods for distinguishing autism spectrum disorder
 The R baseline uses tidymodels recipes and workflows for fold-specific preprocessing and modeling. Install the packages below if necessary. 
 
 ```r
-install.packages(c("R.matlab", "pROC", "tidymodels", "discrim", "kknn"))
+install.packages(c("R.matlab", "pROC", "tidymodels", "discrim", "kknn", "glmnet"))
 ```
 
 The instructor-provided files are included in [`data/`](data/):
@@ -35,21 +35,29 @@ Start with [`nyu_lab.R`](nyu_lab.R) for the class-style walkthrough. With the `.
 Rscript nyu_lab.R
 ```
 
-For configurable sites, report files, or private prediction export, use [`run_analysis.R`](run_analysis.R). [`R/models.R`](R/models.R) contains the tidymodels recipe and workflows used by both scripts. [`R/metrics.R`](R/metrics.R) calculates the evaluation metrics.
+The main runner uses these scripts in order:
+
+1. `R/01_load_date.R` — load connectivity data and labels (filename retained as created).
+2. `R/02_eda.R` — descriptive summaries and class balance.
+3. `R/03_validation.R` — five shared, diagnosis-stratified cross-validation folds.
+4. `R/04_logistic-regression.R` — penalized logistic regression on standardized connectivity edges.
+5. `R/04_pca.R` — PCA feeding LDA and KNN.
+6. `R/05_compare.R` — summarize the held-out predictions using the unchanged `R/metrics.R`.
+7. `R/06_predict.R` — optional final refit and hidden-test prediction export.
+
+`run_analysis.R` sources these scripts automatically. `R/project_files.R` retains command-line options and dataset-reading utilities.
 
 ## Methods and validation
 
-The script follows the Chapter 4 classification lab sequence of inspecting the data, fitting models, and evaluating predictions. It uses the same five seeded, stratified folds for all models. Pooled folds are stratified by both site and diagnosis. The number of principal components and neighbors are fixed for this baseline, so the five folds are used for assessment without a hyperparameter search.
+All three models use the same five diagnosis-stratified folds. Each classifier's recipe estimates imputation, filtering and scaling from **training subjects within each fold**, not from validation or hidden-test subjects.
 
-1. **Logistic regression** uses `parsnip::logistic_reg()` with the `glm` engine on ten principal components. This replaces the previous five-edge selection approach.
-2. **PCA + LDA** uses `discrim::discrim_linear()` with the `MASS` engine on the first ten principal components and takes the ASD posterior probability.
-3. **PCA + KNN** uses `parsnip::nearest_neighbor()` with the `kknn` engine on the first ten principal components and seven neighbors, using its ASD class probability as the score.
+- **Logistic regression:** `parsnip::logistic_reg()` with the `glmnet` engine, fixed L1 penalty 0.01. Regularization makes logistic regression feasible with 19,900 edges.
+- **PCA + LDA:** `discrim::discrim_linear()` with `MASS`, using ten PCA components.
+- **PCA + KNN:** `parsnip::nearest_neighbor()` with `kknn`, using ten PCA components and seven neighbors.
 
-Each fold learns which usable edges to keep, median imputation, centering and scaling, and PCA from its training rows. The fitted transformations are applied to its held-out rows. Site and demographics are used for stratification or description and are excluded from the model inputs.
+The settings are intentionally fixed for this baseline, not tuned against validation scores. `R/metrics.R` is left untouched: its `measure()` function reports ROC AUC, accuracy, sensitivity, specificity, and confusion counts. The model with the highest pooled held-out AUC is refitted on all labeled records for optional hidden predictions; the winning CV AUC is not an independently confirmed performance estimate.
 
-The comparison table pools one out-of-fold score per subject and model. Report ROC AUC and, at an ASD score cutoff of 0.5, accuracy, ASD sensitivity, control specificity, and counts for the confusion matrix. The highest pooled out-of-fold AUC selects the candidate for refitting. Its cross-validation result comes from the same comparison used for selection, so it is not an independent estimate for the selected model.
-
-**Validation status:** The tidymodels refactor has not yet been executed in an R environment or compared against the prior scores. Do not treat the historical metrics as current results. `R/metrics.R` is intentionally unchanged and continues to calculate confusion-matrix statistics and AUC using pROC.
+**Execution status:** The modular scripts have not been run or validated in an R runtime. Existing numerical results below are historical and must not be presented as results from this refactor.
 
 ## Outputs
 
