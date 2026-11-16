@@ -1,0 +1,13 @@
+"site","split","sex_code","subjects"
+"NYU","Test","1",43
+"UM_1","Test","1",19
+"USM","Test","1",30
+"NYU","Training","1",99
+"UM_1","Training","1",64
+"USM","Training","1",70
+"NYU","Test","2",11
+"UM_1","Test","2",14
+"USM","Test","2",0
+"NYU","Training","2",26
+"UM_1","Training","2",10
+"USM","Training","2",0
