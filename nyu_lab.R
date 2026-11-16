@@ -1,45 +1,25 @@
-# NYU lab: compare three classifiers with five-fold cross-validation.
-# Preprocessing and model fitting are handled by tidymodels in R/models.R.
+# Classroom-style example: NYU-only model comparison.
+# Run from the repository root: Rscript nyu_lab.R
 
-source("R/models.R")
+source("R/project_files.R")
 source("R/metrics.R")
+source("R/01_load_date.R")
+source("R/03_validation.R")
+source("R/04_logistic-regression.R")
+source("R/04_pca.R")
+source("R/05_compare.R")
 
-mat <- R.matlab::readMat("data/ABIDEI_Final_Project.mat")
-is_nyu_training <- trimws(unlist(mat$site)) == "NYU" &
-  as.vector(mat$is.train) == 1
+# Import the NYU training subjects.
+project <- load_project_data("data", "NYU")
+training <- project$training
+print(table(diagnosis = training$diagnosis))
 
-x <- t(mat$FC.edges[, is_nyu_training])
-y <- as.vector(mat$label.ASD.train.only)[is_nyu_training]
+# Compare all models on the same five held-out folds.
+folds <- make_validation_folds(training, seed = 6000, number_of_folds = 5)
+models <- c(
+  list("Logistic regression" = make_logistic_workflow(training)),
+  make_pca_workflows(training, components = 10, neighbors = 7)
+)
 
-print(dim(x))
-print(table(diagnosis = y))
-
-# Assign controls and ASD subjects evenly across five folds.
-set.seed(6000)
-fold <- integer(length(y))
-for (diagnosis in 0:1) {
-  rows <- which(y == diagnosis)
-  fold[rows] <- sample(rep(1:5, length.out = length(rows)))
-}
-
-methods <- c("Logistic regression", "PCA + LDA", "PCA + KNN")
-predicted <- matrix(NA_real_, length(y), length(methods),
-                    dimnames = list(NULL, methods))
-
-for (f in 1:5) {
-  held_out <- fold == f
-  predicted[held_out, ] <- fit_and_score(
-    train_x = x[!held_out, , drop = FALSE],
-    train_y = y[!held_out],
-    new_x = x[held_out, , drop = FALSE],
-    methods = methods,
-    n_edges = 5,
-    n_components = 10,
-    neighbors = 7
-  )
-}
-
-results <- do.call(rbind, lapply(methods, function(method) {
-  cbind(model = method, measure(y, predicted[, method]))
-}))
-print(results[order(results$roc_auc, decreasing = TRUE), ], row.names = FALSE)
+# Calculate the same metrics used by the main project.
+compare_models(models, folds, output_dir = "results-r/NYU")
