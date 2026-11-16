@@ -20,7 +20,7 @@ parse_options <- function() {
 }
 
 check_packages <- function() {
-  packages <- c("R.matlab", "MASS", "class")
+  packages <- c("R.matlab", "pROC", "recipes", "parsnip", "workflows", "discrim", "kknn")
   missing_packages <- packages[!vapply(packages, requireNamespace,
                                        logical(1), quietly = TRUE)]
   if (length(missing_packages)) {

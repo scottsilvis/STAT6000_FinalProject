@@ -1,70 +1,71 @@
-# Estimate preprocessing from the training rows and apply it to both sets.
-prepare_edges <- function(train_x, new_x) {
-  # Drop edges with no training values. Fill missing values with training medians.
-  train_x[!is.finite(train_x)] <- NA_real_
-  new_x[!is.finite(new_x)] <- NA_real_
-  keep <- colSums(!is.na(train_x)) > 0L
-  train_x <- train_x[, keep, drop = FALSE]
-  new_x <- new_x[, keep, drop = FALSE]
-  medians <- apply(train_x, 2, median, na.rm = TRUE)
+# Fit each classifier with a tidymodels recipe and workflow.
+# All learned preprocessing is estimated using training subjects only.
 
-  for (column in which(colSums(is.na(train_x)) + colSums(is.na(new_x)) > 0L)) {
-    train_x[is.na(train_x[, column]), column] <- medians[column]
-    new_x[is.na(new_x[, column]), column] <- medians[column]
-  }
+fit_and_score <- function(train_x, train_y, new_x, methods,
+                          n_edges, n_components, neighbors) {
 
-  # Scale the held-out data with the same center and spread as the training data.
-  spread <- apply(train_x, 2, sd)
-  keep <- is.finite(spread) & spread > 0
-  center <- colMeans(train_x)
-  train_x <- scale(train_x[, keep, drop = FALSE], center[keep], spread[keep])
-  new_x <- scale(new_x[, keep, drop = FALSE],
-                 center = attr(train_x, "scaled:center"), scale = spread[keep])
-  list(train = train_x, new = new_x)
-}
+  # Give the connectivity columns consistent names for the recipe.
+  edge_names <- paste0("edge_", seq_len(ncol(train_x)))
+  colnames(train_x) <- edge_names
+  colnames(new_x) <- edge_names
 
-# Use the same fitting code for a CV fold and for the final refit.
-fit_and_score <- function(train_x, train_y, new_x, methods, n_edges, n_components, neighbors) {
-  edges <- prepare_edges(train_x, new_x)
-  train_x <- edges$train
-  new_x <- edges$new
+  # tidymodels expects a categorical outcome for classification.
+  training <- as.data.frame(train_x)
+  training$diagnosis <- factor(
+    ifelse(train_y == 1, "asd", "control"),
+    levels = c("control", "asd")
+  )
+  new_subjects <- as.data.frame(new_x)
 
-  scores <- matrix(NA_real_, nrow(new_x), length(methods), dimnames = list(NULL, methods))
+  # Turn infinite measurements into missing values for imputation.
+  training[edge_names] <- lapply(training[edge_names], function(x) {
+    x[!is.finite(x)] <- NA_real_
+    x
+  })
+  new_subjects[edge_names] <- lapply(new_subjects[edge_names], function(x) {
+    x[!is.finite(x)] <- NA_real_
+    x
+  })
 
-  # Logistic regression on the strongest individual edges.
-  if ("Logistic regression" %in% methods) {
-    # With a binary outcome, absolute correlation ranks edges like the one-way F test.
-    edge_strength <- abs(drop(crossprod(train_x, train_y - mean(train_y))))
-    stopifnot(length(edge_strength) >= n_edges)
-    selected <- order(edge_strength, decreasing = TRUE)[seq_len(n_edges)]
-    train_edges <- as.data.frame(train_x[, selected, drop = FALSE])
-    new_edges <- as.data.frame(new_x[, selected, drop = FALSE])
-    fit <- glm(train_y ~ ., data = train_edges, family = binomial())
-    if (!fit$converged || fit$rank < n_edges + 1L) {
-      stop("Logistic regression failed to converge or has a rank-deficient design.")
-    }
-    scores[, "Logistic regression"] <- predict(fit, newdata = new_edges, type = "response")
-  }
+  # Remove edges that are entirely missing in the training data.
+  available <- vapply(training[edge_names], function(x) any(!is.na(x)), logical(1))
+  if (!any(available)) stop("No usable training edges.")
+  training <- training[, c(edge_names[available], "diagnosis"), drop = FALSE]
+  new_subjects <- new_subjects[, edge_names[available], drop = FALSE]
 
-  # Fit one PCA for the two methods that use principal components.
-  if ("PCA + LDA" %in% methods || "PCA + KNN" %in% methods) {
-    stopifnot(nrow(train_x) > n_components + 2L, ncol(train_x) >= n_components)
-    pca <- prcomp(train_x, center = FALSE, scale. = FALSE, rank. = n_components)
-    train_pcs <- pca$x
-    new_pcs <- predict(pca, newdata = new_x)
-    group <- factor(train_y, levels = 0:1)
+  # Recipes learn medians, standardization, and PCA from training data.
+  # step_zv removes constant columns before scaling.
+  preprocessing <- recipes::recipe(diagnosis ~ ., data = training) |>
+    recipes::step_impute_median(recipes::all_numeric_predictors()) |>
+    recipes::step_zv(recipes::all_predictors()) |>
+    recipes::step_normalize(recipes::all_numeric_predictors()) |>
+    recipes::step_pca(recipes::all_numeric_predictors(), num_comp = n_components)
 
-    if ("PCA + LDA" %in% methods) {
-      fit <- MASS::lda(train_pcs, grouping = group)
-      scores[, "PCA + LDA"] <- predict(fit, newdata = new_pcs)$posterior[, "1"]
-    }
+  # PCA keeps the number of predictors manageable for all three models.
+  # n_edges is retained in the function signature for existing callers.
+  model_specs <- list(
+    "Logistic regression" = parsnip::logistic_reg() |>
+      parsnip::set_engine("glm") |>
+      parsnip::set_mode("classification"),
+    "PCA + LDA" = discrim::discrim_linear() |>
+      parsnip::set_engine("MASS") |>
+      parsnip::set_mode("classification"),
+    "PCA + KNN" = parsnip::nearest_neighbor(neighbors = neighbors) |>
+      parsnip::set_engine("kknn") |>
+      parsnip::set_mode("classification")
+  )
 
-    if ("PCA + KNN" %in% methods) {
-      classification <- class::knn(train_pcs, new_pcs, group, k = neighbors, prob = TRUE)
-      vote_share <- attr(classification, "prob")
-      # knn returns the winning class's vote share. Recover the ASD share.
-      scores[, "PCA + KNN"] <- ifelse(classification == "1", vote_share, 1 - vote_share)
-    }
+  scores <- matrix(NA_real_, nrow(new_subjects), length(methods),
+                   dimnames = list(NULL, methods))
+
+  for (method in methods) {
+    workflow <- workflows::workflow() |>
+      workflows::add_recipe(preprocessing) |>
+      workflows::add_model(model_specs[[method]])
+
+    fitted <- workflows::fit(workflow, data = training)
+    probabilities <- predict(fitted, new_data = new_subjects, type = "prob")
+    scores[, method] <- probabilities$.pred_asd
   }
 
   stopifnot(all(is.finite(scores)), all(scores >= 0 & scores <= 1))
