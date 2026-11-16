@@ -1,29 +1,20 @@
-# Load the instructor-provided study files
-study <- read_study(
-    file.path(data_dir, "ABIDEI_Final_Project.mat")
-)
+library(R.matlab)
 
-# Subset the study to the different sites for later analysis.
-NYU = study$features[study$site_names == "NYU", ]
-UM_1 = study$features[study$site_names == "UM_1", ]
-USM = study$features[study$site_names == "USM", ]
+# Based on the provided import instructions
+study <- readMat("data/ABIDEI_Final_Project.mat")
 
-demo <- read.csv(
-    file.path(data_dir, "ABIDEI_three_sites_behavior.csv"), 
-    stringsAsFactors = FALSE
-)
+# The dataset doesn't import in the correct orientation, so we transpose it. 
+features <- t(study$FC.edges)
+asd_diagnosis <- as.vector(study$label.ASD.train.only)
+training <- as.logical(as.vector(study$is.training))
 
-  edge_names <- paste0("edge_", seq_len(ncol(study$features)))
-  training <- as.data.frame(study$features[labeled, , drop = FALSE])
-  test <- as.data.frame(study$features[hidden, , drop = FALSE])
-  names(training) <- edge_names
-  names(test) <- edge_names
+training_feat <- features[training, , drop = FALSE]
+training_diag <- asd_diagnosis[training]
+test_feat <- features[!training, , drop = FALSE]
+test_ids <- as.vector(study$subject.id)[!training]
 
-  # Probability columns correspond to the ASD class ("asd").
-  training$diagnosis <- factor(ifelse(study$labels[labeled] == 1, "asd", "control"),
-                               levels = c("control", "asd"))
-
-  list(study = study, selected = selected, labeled = labeled, hidden = hidden,
-       training = training, test = test,
-       test_ids = study$subject_ids[hidden])
-}
+# dim(X_train)  # 269 x 19900 - Correct
+# dim(X_test)   # 117 x 19900 - Correct
+# table(y_train) # correct
+# Fit preprocessing and models using training subjects only.
+# Use test_ids in the same order when submitting predictions.
