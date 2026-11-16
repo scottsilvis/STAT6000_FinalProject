@@ -6,7 +6,7 @@ project_root <- dirname(normalizePath(sub("^--file=", "", file_arg)))
 
 source(file.path(project_root, "R/project_files.R"))
 source(file.path(project_root, "R/metrics.R")) # User-maintained metrics
-source(file.path(project_root, "R/01_load_date.R"))
+source(file.path(project_root, "R/01_load_data.R"))
 source(file.path(project_root, "R/02_eda.R"))
 source(file.path(project_root, "R/03_validation.R"))
 source(file.path(project_root, "R/04_logistic-regression.R"))
@@ -17,10 +17,29 @@ source(file.path(project_root, "R/06_predict.R"))
 # 1. Load data and select a site (or all three sites).
 settings <- parse_options()
 check_packages()
-project <- load_project_data(settings$data_dir, settings$site)
+# The loading script provides study, features, asd_diagnosis and training.
+site_names <- trimws(unlist(study$site, use.names = FALSE))
+selected <- settings$site == "ALL" | site_names == settings$site
+labeled_rows <- selected & training
+hidden_rows <- selected & !training
 
-# 2. Summarize the study data without using hidden diagnoses.
-describe_data(project, settings$data_dir, settings$out_dir)
+# Use a data frame with named columns for the tidymodels workflows.
+edge_names <- paste0("edge_", seq_len(ncol(features)))
+training_data <- as.data.frame(features[labeled_rows, , drop = FALSE])
+test_data <- as.data.frame(features[hidden_rows, , drop = FALSE])
+names(training_data) <- edge_names
+names(test_data) <- edge_names
+training_data$diagnosis <- factor(
+  ifelse(asd_diagnosis[labeled_rows] == 1, "asd", "control"),
+  levels = c("control", "asd")
+)
+
+project <- list(training = training_data,
+                test = test_data,
+                test_ids = trimws(unlist(study$subject.id))[hidden_rows])
+
+# 2. Explore all three sites; the plots are also saved for the final report.
+describe_data(study, settings$data_dir, settings$out_dir)
 
 # 3. Create the five cross-validation folds shared by every method.
 folds <- make_validation_folds(project$training, seed = 6000, number_of_folds = 5)
