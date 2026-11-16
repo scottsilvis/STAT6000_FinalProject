@@ -1,86 +1,56 @@
 #!/usr/bin/env Rscript
 
-# Load the supporting files relative to this script, even when run from elsewhere.
-script_arg <- grep("^--file=", commandArgs(), value = TRUE)[1]
-script_dir <- dirname(normalizePath(sub("^--file=", "", script_arg), mustWork = TRUE))
-source(file.path(script_dir, "R", "project_files.R"))
-source(file.path(script_dir, "R", "models.R"))
-source(file.path(script_dir, "R", "metrics.R"))
+# Run the STAT 6000 analysis in the same order as the lab workflow.
+file_arg <- grep("^--file=", commandArgs(), value = TRUE)[1]
+project_root <- dirname(normalizePath(sub("^--file=", "", file_arg)))
 
-# 1. Set the baseline and select the study cohort.
-options <- parse_options()
+source(file.path(project_root, "R/project_files.R"))
+source(file.path(project_root, "R/metrics.R")) # User-maintained metrics
+source(file.path(project_root, "R/01_load_date.R"))
+source(file.path(project_root, "R/02_eda.R"))
+source(file.path(project_root, "R/03_validation.R"))
+source(file.path(project_root, "R/04_logistic-regression.R"))
+source(file.path(project_root, "R/04_pca.R"))
+source(file.path(project_root, "R/05_compare.R"))
+source(file.path(project_root, "R/06_predict.R"))
+
+# 1. Load data and select a site (or all three sites).
+settings <- parse_options()
 check_packages()
+project <- load_project_data(settings$data_dir, settings$site)
 
-n_folds <- 5L
-n_edges <- 5L
-n_components <- 10L
-neighbors <- 7L
-seed <- 6000L
-models <- c("Logistic regression", "PCA + LDA", "PCA + KNN")
+# 2. Summarize the study data without using hidden diagnoses.
+describe_data(project, settings$data_dir, settings$out_dir)
 
-study <- read_study(file.path(options$data_dir, "ABIDEI_Final_Project.mat"))
-site <- options$site
-site_rows <- site == "ALL" | study$site_names == site
-training_rows <- site_rows & study$is_train == 1
-hidden_rows <- site_rows & study$is_train == 0
-x <- study$features[training_rows, , drop = FALSE]
-y <- study$labels[training_rows]
+# 3. Create the five cross-validation folds shared by every method.
+folds <- make_validation_folds(project$training, seed = 6000, number_of_folds = 5)
 
-# 2. Compare the models on the same five stratified folds.
-set.seed(seed)
-fold_id <- integer(length(y))
-# In pooled runs, stratifying by site and diagnosis preserves both distributions.
-strata <- split(seq_along(y), list(study$site_names[training_rows], y), drop = TRUE)
-for (rows in strata) {
-  stopifnot(length(rows) >= n_folds)
-  fold_id[rows] <- sample(rep(seq_len(n_folds), length.out = length(rows)))
-}
+# 4. Define the classifiers; the recipes are fitted within each fold.
+workflows_to_compare <- c(
+  list("Logistic regression" = make_logistic_workflow(project$training)),
+  make_pca_workflows(project$training, components = 10, neighbors = 7)
+)
 
-oof_scores <- matrix(NA_real_, length(y), length(models), dimnames = list(NULL, models))
-fold_metrics <- NULL
-for (fold in seq_len(n_folds)) {
-  held_out <- fold_id == fold
-  message("Fitting fold ", fold, " of ", n_folds)
-  fold_train <- x[!held_out, , drop = FALSE]
-  fold_validation <- x[held_out, , drop = FALSE]
-  scores <- fit_and_score(fold_train, y[!held_out], fold_validation, models,
-                          n_edges, n_components, neighbors)
-  oof_scores[held_out, ] <- scores
-  for (model in models) {
-    fold_metrics <- rbind(fold_metrics, data.frame(
-      model = model, fold = fold, measure(y[held_out], scores[, model])
-    ))
-  }
-}
-
-stopifnot(all(is.finite(oof_scores)))
-comparison <- NULL
-for (model in models) {
-  comparison <- rbind(comparison, data.frame(model = model, measure(y, oof_scores[, model])))
-}
-comparison <- comparison[order(comparison$roc_auc, decreasing = TRUE), ]
+# 5. Compare the held-out predictions using R/metrics.R.
+comparison <- compare_models(workflows_to_compare, folds, settings$out_dir)
 winner <- comparison$model[1]
+message("Selected model: ", winner)
 
-# 3. Save the comparison and the cohort summaries.
-behavior_path <- file.path(options$data_dir, "ABIDEI_three_sites_behavior.csv")
-demographics <- summarize_demographics(behavior_path, study, site_rows)
-run_settings <- data.frame(site, seed, n_folds, n_edges, n_components, neighbors,
-                           selected_model = winner, hidden_predictions = options$predict_hidden)
-save_results(options$out_dir, demographics, fold_metrics, comparison, run_settings)
+run_settings <- data.frame(
+  site = settings$site,
+  seed = 6000,
+  n_folds = 5,
+  n_components = 10,
+  neighbors = 7,
+  logistic_penalty = 0.01,
+  selected_model = winner,
+  hidden_predictions = settings$predict_hidden
+)
+write.csv(run_settings, file.path(settings$out_dir, "run_settings.csv"), row.names = FALSE)
+writeLines(capture.output(sessionInfo()), file.path(settings$out_dir, "session_info.txt"))
 
-# 4. If requested, refit the winner and score the hidden-test subjects.
-if (options$predict_hidden) {
-  set.seed(seed)
-  test_features <- study$features[hidden_rows, , drop = FALSE]
-  test_scores <- fit_and_score(x, y, test_features, winner,
-                               n_edges, n_components, neighbors)
-  asd_score <- test_scores[, winner]
-  predictions <- data.frame(subject_id = study$subject_ids[hidden_rows],
-                            predicted_label = as.integer(asd_score >= 0.5),
-                            predicted_probability = asd_score)
-  prediction_path <- file.path(options$out_dir, paste0(site, "_test_predictions.csv"))
-  write.csv(predictions, prediction_path, row.names = FALSE)
+# 6. Optionally refit the selected workflow to predict hidden subjects.
+if (settings$predict_hidden) {
+  predict_hidden(workflows_to_compare[[winner]], project,
+                 settings$out_dir, site = settings$site)
 }
-
-print(comparison, row.names = FALSE)
-message("Results saved to ", normalizePath(options$out_dir))
