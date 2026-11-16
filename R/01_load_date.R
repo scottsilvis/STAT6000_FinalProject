@@ -1,9 +1,17 @@
-# Load the instructor-provided study files and choose the analysis cohort.
-load_project_data <- function(data_dir, selected_site = "ALL") {
-  study <- read_study(file.path(data_dir, "ABIDEI_Final_Project.mat"))
-  selected <- selected_site == "ALL" | study$site_names == selected_site
-  labeled <- selected & study$is_train == 1
-  hidden <- selected & study$is_train == 0
+# Load the instructor-provided study files
+study <- read_study(
+    file.path(data_dir, "ABIDEI_Final_Project.mat")
+)
+
+# Subset the study to the different sites for later analysis.
+NYU = study$features[study$site_names == "NYU", ]
+UM_1 = study$features[study$site_names == "UM_1", ]
+USM = study$features[study$site_names == "USM", ]
+
+demo <- read.csv(
+    file.path(data_dir, "ABIDEI_three_sites_behavior.csv"), 
+    stringsAsFactors = FALSE
+)
 
   edge_names <- paste0("edge_", seq_len(ncol(study$features)))
   training <- as.data.frame(study$features[labeled, , drop = FALSE])
