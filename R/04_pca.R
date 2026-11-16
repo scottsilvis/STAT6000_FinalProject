@@ -6,6 +6,9 @@
 #   function; 03_validation.R scores each workflow it returns.
 # ==============================================================================
 
+# The MASS engine for discrim_linear() is registered when discrim is loaded.
+library(discrim)
+
 # 1. Build the workflows -------------------------------------------------------
 # PCA reduces 19,900 brain connections to a manageable set of components.
 # LDA and KNN share the PCA recipe, but each fits its own classifier.
@@ -17,7 +20,7 @@ make_pca_workflows <- function(training, components = 10, neighbors = 7) {
     recipes::step_normalize(recipes::all_numeric_predictors()) |>
     recipes::step_pca(recipes::all_numeric_predictors(), num_comp = components)
 
-  lda_model <- discrim::discrim_linear() |>
+  lda_model <- parsnip::discrim_linear() |>
     parsnip::set_engine("MASS") |>
     parsnip::set_mode("classification")
 
