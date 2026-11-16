@@ -6,7 +6,7 @@ study <- readMat("data/ABIDEI_Final_Project.mat")
 # The dataset doesn't import in the correct orientation, so we transpose it. 
 features <- t(study$FC.edges)
 asd_diagnosis <- as.vector(study$label.ASD.train.only)
-training <- as.logical(as.vector(study$is.training))
+training <- as.logical(as.vector(study$is.train))
 
 training_feat <- features[training, , drop = FALSE]
 training_diag <- asd_diagnosis[training]
