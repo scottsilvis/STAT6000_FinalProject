@@ -9,7 +9,7 @@ This course project compares methods for distinguishing autism spectrum disorder
 The R baseline uses tidymodels recipes and workflows for fold-specific preprocessing and modeling. Install the packages below if necessary. 
 
 ```r
-install.packages(c("R.matlab", "pROC", "tidymodels", "discrim", "kknn", "glmnet"))
+install.packages(c("R.matlab", "pROC", "tidymodels", "discrim", "kknn", "glmnet", "ggplot2"))
 ```
 
 The instructor-provided files are included in [`data/`](data/):
@@ -37,8 +37,8 @@ Rscript nyu_lab.R
 
 The main runner uses these scripts in order:
 
-1. `R/01_load_date.R` — load connectivity data and labels (filename retained as created).
-2. `R/02_eda.R` — descriptive summaries and class balance.
+1. `R/01_load_data.R` — load connectivity data and labels.
+2. `R/02_eda.R` — required EDA tables and four ggplot2 figures, using all three sites. Run it after loading data with `describe_data(study, "data", "results-r/ALL")`.
 3. `R/03_validation.R` — five shared, diagnosis-stratified cross-validation folds.
 4. `R/04_logistic-regression.R` — penalized logistic regression on standardized connectivity edges.
 5. `R/04_pca.R` — PCA feeding LDA and KNN.
@@ -64,7 +64,9 @@ The settings are intentionally fixed for this baseline, not tuned against valida
 | File | Contents |
 | --- | --- |
 | `dataset_summary.csv` | Counts and age summaries by site and split, labeled class balance, and feature count |
-| `sex_counts.csv` | Sex-code frequencies by site and split |
+| `sex_counts.csv` | Sex-code frequencies by site and split (1/2 codes, unverified labels) |
+| `class_balance.csv`, `age_summary.csv`, `feature_summary.csv` | Labeled diagnosis counts, age descriptions, and dimensionality/completeness |
+| `site_counts.png`, `class_balance.png`, `age_distribution.png`, `sex_codes.png` | ggplot2 EDA figures for the report |
 | `fold_metrics.csv` | One row per held-out fold and method |
 | `model_comparison.csv` | Pooled out-of-fold metrics and confusion counts |
 | `run_settings.csv`, `session_info.txt` | Model settings, selected method, and R environment |
