@@ -6,10 +6,10 @@ This course project compares methods for distinguishing autism spectrum disorder
 
 ## Run the R baseline
 
-The packages `MASS` and `class` are used with the code in this repository. Use the code below to install the packages, if you don't already have them installed. 
+The R baseline uses tidymodels recipes and workflows for fold-specific preprocessing and modeling. Install the packages below if necessary. 
 
 ```r
-install.packages(c("R.matlab", "MASS", "class"))
+install.packages(c("R.matlab", "pROC", "tidymodels", "discrim", "kknn"))
 ```
 
 The instructor-provided files are included in [`data/`](data/):
@@ -35,19 +35,21 @@ Start with [`nyu_lab.R`](nyu_lab.R) for the class-style walkthrough. With the `.
 Rscript nyu_lab.R
 ```
 
-For configurable sites, report files, or private prediction export, use [`run_analysis.R`](run_analysis.R). [`R/models.R`](R/models.R) contains the shared fold preprocessing and the full runner's model fits. [`R/metrics.R`](R/metrics.R) calculates the evaluation metrics.
+For configurable sites, report files, or private prediction export, use [`run_analysis.R`](run_analysis.R). [`R/models.R`](R/models.R) contains the tidymodels recipe and workflows used by both scripts. [`R/metrics.R`](R/metrics.R) calculates the evaluation metrics.
 
 ## Methods and validation
 
-The script follows the Chapter 4 classification lab sequence of inspecting the data, fitting models, and evaluating predictions. It uses the same five seeded, stratified folds for all models. Pooled folds are stratified by both site and diagnosis. The model settings are fixed for this baseline, so the five folds are used for assessment without a hyperparameter search.
+The script follows the Chapter 4 classification lab sequence of inspecting the data, fitting models, and evaluating predictions. It uses the same five seeded, stratified folds for all models. Pooled folds are stratified by both site and diagnosis. The number of principal components and neighbors are fixed for this baseline, so the five folds are used for assessment without a hyperparameter search.
 
-1. **Logistic regression** uses `glm(..., family = binomial())` on the five edges with the largest absolute training-only correlations with diagnosis. A small edge count limits the number of coefficients relative to each site's sample size.
-2. **PCA + LDA** uses `MASS::lda()` with the first ten principal components and takes the ASD posterior probability.
-3. **PCA + KNN** uses `class::knn()` with the first ten principal components and seven neighbors, using the ASD vote share as the score.
+1. **Logistic regression** uses `parsnip::logistic_reg()` with the `glm` engine on ten principal components. This replaces the previous five-edge selection approach.
+2. **PCA + LDA** uses `discrim::discrim_linear()` with the `MASS` engine on the first ten principal components and takes the ASD posterior probability.
+3. **PCA + KNN** uses `parsnip::nearest_neighbor()` with the `kknn` engine on the first ten principal components and seven neighbors, using its ASD class probability as the score.
 
-Each fold learns which edges to keep, median imputation, centering and scaling, and feature selection or PCA from its training rows. The fitted transformations are applied to its held-out rows. Site and demographics are used for stratification or description and are excluded from the model inputs.
+Each fold learns which usable edges to keep, median imputation, centering and scaling, and PCA from its training rows. The fitted transformations are applied to its held-out rows. Site and demographics are used for stratification or description and are excluded from the model inputs.
 
 The comparison table pools one out-of-fold score per subject and model. Report ROC AUC and, at an ASD score cutoff of 0.5, accuracy, ASD sensitivity, control specificity, and counts for the confusion matrix. The highest pooled out-of-fold AUC selects the candidate for refitting. Its cross-validation result comes from the same comparison used for selection, so it is not an independent estimate for the selected model.
+
+**Validation status:** The tidymodels refactor has not yet been executed in an R environment or compared against the prior scores. Do not treat the historical metrics as current results. `R/metrics.R` is intentionally unchanged and continues to calculate confusion-matrix statistics and AUC using pROC.
 
 ## Outputs
 
@@ -76,7 +78,7 @@ Only the `ALL` run covers all 117 hidden-test IDs required by the assignment. Re
 3. Match the predictions to the template by subject ID, preserving leading zeros and the template's row order. Fill only the two yellow columns. Enter `0` (Control) or `1` (ASD) in `predicted_label` and an ASD probability between 0 and 1 in `predicted_probability`. Preserve all subject IDs, site values, headers, and workbook structure.
 4. Verify that all 117 subjects have both values. Save as `TeamName_Round1.xlsx` and submit one completed Excel workbook per team through Canvas. The local CSV is an intermediate file.
 
-## Verified NYU comparison
+## Historical NYU comparison (before tidymodels refactor)
 
 | Model | R ROC AUC | Python ROC AUC | R accuracy | Python accuracy |
 | --- | ---: | ---: | ---: | ---: |
@@ -84,7 +86,7 @@ Only the `ALL` run covers all 117 hidden-test IDs required by the assignment. Re
 | PCA + KNN | 0.642 | 0.616 | 0.600 | 0.608 |
 | Logistic regression | 0.440 | 0.619 | 0.472 | 0.608 |
 
-These scores use the same 125 labeled NYU subjects. See the [full R results](RESULTS.md), [aggregate metrics CSV](results/model_comparison.csv), and [EDA and validation checks](EDA_AND_VALIDATION.md).
+These scores predate the tidymodels implementation and must be regenerated before reporting results from the new R models. The logistic regression feature strategy and KNN probability engine changed. These historical scores use the same 125 labeled NYU subjects. See the [full R results](RESULTS.md), [aggregate metrics CSV](results/model_comparison.csv), and [EDA and validation checks](EDA_AND_VALIDATION.md).
 
 ## Historical Python reference
 
