@@ -1,5 +1,15 @@
+# R/04_pca.R
+
+# ==============================================================================
+# Purpose:
+#   Build the PCA + LDA and PCA + KNN workflows. This file only defines a
+#   function; 03_validation.R scores each workflow it returns.
+# ==============================================================================
+
+# 1. Build the workflows -------------------------------------------------------
 # PCA reduces 19,900 brain connections to a manageable set of components.
 # LDA and KNN share the PCA recipe, but each fits its own classifier.
+# training needs a diagnosis column with levels "control" and "asd".
 make_pca_workflows <- function(training, components = 10, neighbors = 7) {
   preprocessing <- recipes::recipe(diagnosis ~ ., data = training) |>
     recipes::step_impute_median(recipes::all_numeric_predictors()) |>
@@ -15,6 +25,7 @@ make_pca_workflows <- function(training, components = 10, neighbors = 7) {
     parsnip::set_engine("kknn") |>
     parsnip::set_mode("classification")
 
+  # Returned as a named list so the names can be passed to validate_workflow().
   list(
     "PCA + LDA" = workflows::workflow() |>
       workflows::add_recipe(preprocessing) |>

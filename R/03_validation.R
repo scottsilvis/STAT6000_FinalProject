@@ -1,33 +1,52 @@
-# Every model uses the same five held-out groups.
-# A recipe is fitted afresh on the training portion of each split.
+# R/03_validation.R
+
+# ==============================================================================
+# Purpose:
+#   Cross-validation for every model. All models are scored on the same five
+#   held-out folds. Requires measure() from metrics.R.
+# ==============================================================================
+
+# 1. Create the folds ----------------------------------------------------------
+# Each fold keeps roughly the same share of ASD and control subjects.
+# training needs a diagnosis column with levels "control" and "asd".
 make_validation_folds <- function(training, seed = 6000, number_of_folds = 5) {
   set.seed(seed)
   rsample::vfold_cv(training, v = number_of_folds, strata = diagnosis)
 }
 
-# Evaluate one workflow against the same cross-validation folds.
+# 2. Evaluate a model on the folds ---------------------------------------------
 validate_workflow <- function(workflow, folds, model_name) {
-  all_predictions <- list()
-  fold_results <- list()
+  predictions <- list()
+  fold_metrics <- list()
 
   for (i in seq_len(nrow(folds))) {
-    split <- folds$splits[[i]]
-    training_rows <- rsample::analysis(split)
-    validation_rows <- rsample::assessment(split)
+    fold_train <- rsample::analysis(folds$splits[[i]])
+    fold_test <- rsample::assessment(folds$splits[[i]])
 
-    # Fitting the workflow also learns imputation, scaling and PCA.
-    fitted <- workflows::fit(workflow, data = training_rows)
-    scores <- predict(fitted, new_data = validation_rows, type = "prob")$.pred_asd
+    # Fitting the workflow also learns imputation, scaling and PCA, using
+    # fold_train only.
+    fitted <- workflows::fit(workflow, data = fold_train)
+    score <- predict(fitted, new_data = fold_test, type = "prob")$.pred_asd
 
-    actual <- as.integer(validation_rows$diagnosis == "asd")
-    fold_results[[i]] <- data.frame(
-      model = model_name, fold = i, measure(actual, scores)
+    # measure() expects 0 = control and 1 = ASD.
+    actual <- as.integer(fold_test$diagnosis == "asd")
+
+    predictions[[i]] <- data.frame(
+      model = model_name,
+      fold = i,
+      actual = actual,
+      score = score
     )
-    all_predictions[[i]] <- data.frame(
-      model = model_name, fold = i, actual = actual, score = scores
+
+    fold_metrics[[i]] <- data.frame(
+      model = model_name,
+      fold = i,
+      measure(actual, score)
     )
   }
 
-  list(predictions = do.call(rbind, all_predictions),
-       fold_metrics = do.call(rbind, fold_results))
+  list(
+    predictions = do.call(rbind, predictions),
+    fold_metrics = do.call(rbind, fold_metrics)
+  )
 }

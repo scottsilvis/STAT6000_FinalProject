@@ -1,103 +1,92 @@
-# Exploratory Data Analysis (EDA) for the three-site ABIDE dataset.
-# Figures use ggplot2. 
+# R/02_eda.R
 
+# ==============================================================================
+# Purpose:
+#   Exploratory data analysis (EDA) for the three-site ABIDE dataset. Run
+#   01_load_data.R first. Tables are saved to results/ as CSVs and figures as
+#   PNGs.
+# ==============================================================================
 
-# 1. Check for duplicate subject IDs
-duplicate_ids <- unique(subject_ids[duplicated(subject_ids)])
+library(ggplot2)
+source(here::here("R", "utils_plot.R"))
 
-if (length(duplicate_ids) > 0) {
-  stop(
-    "Duplicate subject IDs found in study: ",
-    paste(duplicate_ids, collapse = ", ")
-  )
-}
-
-# 2. Check for duplicate IDs in demographics
-duplicate_demo_ids <- unique(demo$subject_id[duplicated(demo$subject_id)])
-
-if (length(duplicate_demo_ids) > 0) {
-  stop(
-    "Duplicate subject IDs found in demographics: ",
-    paste(duplicate_demo_ids, collapse = ", ")
-  )
-}
-  
-# Remove the temp id variables after they pass the checkpoints
-remove(duplicate_ids, duplicate_demo_ids)
-
-# 3. Summarize the sample size, sites and known diagnoses.
-site_counts <- as.data.frame(
-  table(
-    site = site,
-    training = training
-  )
+# 1. Build one table with a row per subject ------------------------------------
+# demo was already matched to subject_ids in 01_load_data.R.
+subjects <- data.frame(
+  subject_id = subject_ids,
+  site       = demo$site,
+  age        = demo$age,
+  sex_code   = factor(demo$sex),
+  split      = ifelse(training, "Training", "Test"),
+  diagnosis  = ifelse(training,
+                      ifelse(asd_diagnosis == 1, "ASD", "Control"),
+                      NA)
 )
 
-# Count ASD and control subjects at each site
-class_balance <- as.data.frame(
-  table(
-    site = site[training],
-    diagnosis = asd_diagnosis[training]
-  )
-)
+# 2. Summary tables ------------------------------------------------------------
+# Subjects per site, split by training/test
+site_counts <- as.data.frame(table(
+  site = subjects$site,
+  split = subjects$split
+))
+
+names(site_counts)[3] <- "subjects"
+
+# ASD vs control within the labeled training subjects
+class_balance <- as.data.frame(table(
+  site = subjects$site[training],
+  diagnosis = subjects$diagnosis[training]
+))
 
 names(class_balance)[3] <- "subjects"
 
-print(class_balance)
-
-
-# Count sex within ASD and control subjects at each site and split
-sex_counts <- as.data.frame(
-  table(
-    site = site,
-    training = training,
-    sex_code = demo$sex,
-    useNA = "ifany"
-  )
-)
+# Sex codes by site and split. We have not confirmed what 1 and 2 mean.
+sex_counts <- as.data.frame(table(
+  site = subjects$site,
+  split = subjects$split,
+  sex_code = subjects$sex_code
+))
 
 names(sex_counts)[4] <- "subjects"
 
-sex_counts <- sex_counts[sex_counts$subjects > 0, ]
-
-print(sex_counts)
-
-# Age is described separately by site and known/hidden split.
+# Age by site and split
 age_summary <- aggregate(
-  demo$age,
-  by = list(site = demo$site),
-  FUN = function(age) c(
-    mean = mean(age, na.rm = TRUE),
-    median = median(age, na.rm = TRUE),
-    min = min(age, na.rm = TRUE),
-    max = max(age, na.rm = TRUE)
-  )
+  age ~ site + split,
+  data = subjects,
+  FUN = function(x) round(c(mean = mean(x),
+                            median = median(x),
+                            min = min(x),
+                            max = max(x)),
+                          2)
 )
+# aggregate() returns the four statistics as one matrix column; split them out
+age_summary <- do.call(data.frame, age_summary)
+names(age_summary) <- sub("^age\\.", "", names(age_summary))
 
-print(age_summary)
-
-# 4. Describe feature dimensionality and data completeness.
-
+# Size and completeness of the connectivity features
 feature_summary <- data.frame(
-  subjects = length(subject_ids),
-  labeled = sum(training),
-  hidden = sum(!training),
-  regions = as.integer(study$n.roi),
-  features = nrow(study$FC.edges),
-  missing = sum(!is.finite(study$FC.edges))
+  subjects = nrow(features),
+  training = sum(training),
+  test     = sum(!training),
+  regions  = as.integer(study$n.roi),
+  features = ncol(features),
+  missing  = sum(!is.finite(features))
 )
 
-print(feature_summary)
+site_counts
+class_balance
+sex_counts
+age_summary
+feature_summary
 
-# 5. Save report-ready tables.
-write.csv(site_counts, file.path("results/dataset_summary.csv"), row.names = FALSE)
-write.csv(class_balance, file.path("results/class_balance.csv"), row.names = FALSE)
-write.csv(age_summary, file.path("results/age_summary.csv"), row.names = FALSE)
-write.csv(sex_counts, file.path("results/sex_counts.csv"), row.names = FALSE)
-write.csv(feature_summary, file.path("results/feature_summary.csv"), row.names = FALSE)
+# 3. Save tables ---------------------------------------------------------------
+save_table(site_counts,     "site_counts.csv")
+save_table(class_balance,   "class_balance.csv")
+save_table(sex_counts,      "sex_counts.csv")
+save_table(age_summary,     "age_summary.csv")
+save_table(feature_summary, "feature_summary.csv")
 
-# 6. Create figures with ggplot2.
-library(ggplot2)
+# 4. Figures -------------------------------------------------------------------
 site_plot <- ggplot(site_counts, 
                     aes(x = site, 
                         y = subjects, 
@@ -109,7 +98,7 @@ site_plot <- ggplot(site_counts,
        fill = "Dataset") +
   theme_minimal()
 
-class_plot <- ggplot(class_balance,
+class_plot <- ggplot(class_balance, 
                      aes(x = site, 
                          y = subjects, 
                          fill = diagnosis)) +
@@ -120,13 +109,12 @@ class_plot <- ggplot(class_balance,
        fill = "Diagnosis") +
   theme_minimal()
 
-age_plot <- ggplot(subjects,
+age_plot <- ggplot(subjects, 
                    aes(x = age, 
                        fill = split)) +
   geom_histogram(binwidth = 5, 
-                 boundary = 0,
-                 color = "white", 
-                 na.rm = TRUE) +
+                 boundary = 0, 
+                 color = "white") +
   facet_wrap(~site) +
   labs(title = "Age distributions by study site",
        x = "Age (years)", 
@@ -134,36 +122,18 @@ age_plot <- ggplot(subjects,
        fill = "Dataset") +
   theme_minimal()
 
-# Do we know how male and female are coded? I assume 1 = male 2 = female but I 
-# dont want to code that into the figures until we confirm that. 
-sex_plot <- ggplot(sex_counts,
+# Sex codes are left as 1 and 2 until we confirm the labels.
+sex_plot <- ggplot(subjects, 
                    aes(x = site, 
-                       y = subjects, 
                        fill = sex_code)) +
-  geom_col() +
+  geom_bar() +
   labs(title = "Sex-code distributions by study site",
        x = "Site", 
        y = "Number of subjects", 
        fill = "Sex code") +
   theme_minimal()
 
-ggplot2::ggsave(file.path(out_dir, "site_counts.png"),
-                site_plot, width = 7, height = 4, dpi = 300)
-ggplot2::ggsave(file.path(out_dir, "class_balance.png"),
-                class_plot, width = 7, height = 4, dpi = 300)
-ggplot2::ggsave(file.path(out_dir, "age_distribution.png"),
-                age_plot, width = 8, height = 4, dpi = 300)
-ggplot2::ggsave(file.path(out_dir, "sex_codes.png"),
-                sex_plot, width = 7, height = 4, dpi = 300)
-
-print(site_counts)
-print(class_balance)
-print(feature_summary)
-
-invisible(list(subjects = subjects,
-               site_counts = site_counts,
-               class_balance = class_balance,
-               age_summary = age_summary,
-               sex_counts = sex_counts,
-               feature_summary = feature_summary))
-
+save_fig(site_plot,  "site_counts.png")
+save_fig(class_plot, "class_balance.png")
+save_fig(age_plot,   "age_distribution.png")
+save_fig(sex_plot,   "sex_codes.png")

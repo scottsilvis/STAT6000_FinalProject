@@ -9,7 +9,7 @@ This course project compares methods for distinguishing autism spectrum disorder
 The R baseline uses tidymodels recipes and workflows for fold-specific preprocessing and modeling. Install the packages below if necessary. 
 
 ```r
-install.packages(c("R.matlab", "pROC", "tidymodels", "discrim", "kknn", "glmnet", "ggplot2"))
+install.packages(c("R.matlab", "pROC", "tidymodels", "discrim", "kknn", "glmnet", "ggplot2", "here"))
 ```
 
 The instructor-provided files are included in [`data/`](data/):
