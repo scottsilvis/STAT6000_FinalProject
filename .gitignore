@@ -6,7 +6,7 @@ ABIDEI_three_sites_behavior.csv
 .DS_Store
 
 # Subject-level predictions stay local
-*test_predictions.csv
+*test_predictions*.csv
 .Rproj.user/
 .Rhistory
 .RData
